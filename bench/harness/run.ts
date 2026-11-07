@@ -47,6 +47,15 @@ interface Config {
   outDir: string;
 }
 
+type AttemptStatus =
+  | "correct"
+  | "wrong_answer"
+  | "invalid_format"
+  | "timeout"
+  | "tool_limit"
+  | "turn_limit"
+  | "error";
+
 interface Attempt {
   runId: string;
   model: string;
@@ -57,6 +66,8 @@ interface Attempt {
   answerType: string;
   rep: number;
   correct: boolean;
+  status: AttemptStatus;
+  statusReason: string;
   scoreReason: string;
   answer?: unknown;
   answerError?: string;
@@ -138,7 +149,7 @@ function loadConfig(): Config {
       "opencode/deepseek-v4.1-flash-free",
     arms,
     reps: Number(process.env.KG_REPS ?? (smoke ? 1 : 3)),
-    timeoutMs: Number(process.env.KG_TIMEOUT_MS ?? 120_000),
+    timeoutMs: Number(process.env.KG_TIMEOUT_MS ?? 300_000),
     maxToolCalls: Number(process.env.KG_MAX_TOOL_CALLS ?? 25),
     maxTurns: Number(process.env.KG_MAX_TURNS ?? 15),
     portBase: Number(process.env.KG_PORT_BASE ?? 8810),
@@ -586,6 +597,16 @@ async function runAttempt(options: {
       ? FATAL_PATTERNS.find((pattern) => stderr.includes(pattern))
       : undefined);
 
+  const classification = classifyAttempt({
+    correct: score.correct,
+    scoreReason: score.reason,
+    answerError: extracted.error,
+    timedOut,
+    toolLimitExceeded,
+    turnLimitExceeded,
+    fatal,
+  });
+
   return {
     runId: config.runId,
     model: config.model,
@@ -596,6 +617,8 @@ async function runAttempt(options: {
     answerType: task.answer_type,
     rep,
     correct: score.correct,
+    status: classification.status,
+    statusReason: classification.reason,
     scoreReason: score.reason,
     answer: extracted.answer,
     answerError: extracted.error,
@@ -621,6 +644,26 @@ function isValid(attempt: Attempt): boolean {
     !attempt.turnLimitExceeded &&
     !attempt.answerError
   );
+}
+
+function classifyAttempt(args: {
+  correct: boolean;
+  scoreReason: string;
+  answerError?: string;
+  timedOut: boolean;
+  toolLimitExceeded: boolean;
+  turnLimitExceeded: boolean;
+  fatal?: string;
+}): { status: AttemptStatus; reason: string } {
+  if (args.fatal) return { status: "error", reason: args.fatal };
+  if (args.toolLimitExceeded)
+    return { status: "tool_limit", reason: "tool-call limit exceeded" };
+  if (args.turnLimitExceeded)
+    return { status: "turn_limit", reason: "turn limit exceeded" };
+  if (args.timedOut) return { status: "timeout", reason: "time budget exceeded" };
+  if (args.correct) return { status: "correct", reason: args.scoreReason };
+  if (args.answerError) return { status: "invalid_format", reason: args.answerError };
+  return { status: "wrong_answer", reason: args.scoreReason };
 }
 
 function mean(values: number[]): number {
@@ -658,9 +701,12 @@ function bootstrapCi(
 
 function aggregate(attempts: Attempt[]): Aggregate {
   const valid = attempts.filter(isValid);
+  // Cost metrics (tokens, tool calls, turns, latency) are averaged over ALL
+  // attempts: a task that rambles and fails, or times out, still spent that
+  // budget, so excluding it would understate an arm's true per-task cost.
   const accuracy = mean(attempts.map((attempt) => (attempt.correct ? 1 : 0)));
-  const tokens = mean(valid.map((attempt) => attempt.tokens.total));
-  const toolCalls = mean(valid.map((attempt) => attempt.toolCalls));
+  const tokens = mean(attempts.map((attempt) => attempt.tokens.total));
+  const toolCalls = mean(attempts.map((attempt) => attempt.toolCalls));
   return {
     n: attempts.length,
     invalid: attempts.length - valid.length,
@@ -668,10 +714,10 @@ function aggregate(attempts: Attempt[]): Aggregate {
     accuracy,
     tokens,
     toolCalls,
-    turns: mean(valid.map((attempt) => attempt.turns)),
-    latencyMs: mean(valid.map((attempt) => attempt.latencyMs)),
-    tokenCi: bootstrapCi(valid, (attempt) => attempt.tokens.total),
-    toolCi: bootstrapCi(valid, (attempt) => attempt.toolCalls),
+    turns: mean(attempts.map((attempt) => attempt.turns)),
+    latencyMs: mean(attempts.map((attempt) => attempt.latencyMs)),
+    tokenCi: bootstrapCi(attempts, (attempt) => attempt.tokens.total),
+    toolCi: bootstrapCi(attempts, (attempt) => attempt.toolCalls),
     accuracyCi: bootstrapCi(attempts, (attempt) => (attempt.correct ? 1 : 0)),
   };
 }
@@ -839,17 +885,40 @@ function reportMarkdown(
   lines.push("");
   lines.push(result.reason);
   lines.push("");
-  const invalid = attempts.filter((attempt) => !isValid(attempt));
-  if (invalid.length > 0) {
-    lines.push("## Invalid attempts");
+  const failures = attempts.filter((attempt) => attempt.status !== "correct");
+  if (failures.length > 0) {
+    lines.push("## Failures");
     lines.push("");
-    for (const attempt of invalid.slice(0, 50)) {
+    lines.push(
+      "A wrong answer, a format miss, and a budget overrun (timeout / tool / turn limit) are distinct findings.",
+    );
+    lines.push("");
+    const statuses: AttemptStatus[] = [
+      "wrong_answer",
+      "invalid_format",
+      "timeout",
+      "tool_limit",
+      "turn_limit",
+      "error",
+    ];
+    const byStatus = statuses
+      .map((status) => ({
+        status,
+        n: failures.filter((failure) => failure.status === status).length,
+      }))
+      .filter((row) => row.n > 0);
+    lines.push("| status | count |");
+    lines.push("| --- | ---: |");
+    for (const row of byStatus) lines.push(`| ${row.status} | ${row.n} |`);
+    lines.push("");
+    lines.push("| task | arm | rep | status | runtime ms | tokens | reason |");
+    lines.push("| --- | --- | ---: | --- | ---: | ---: | --- |");
+    for (const attempt of failures.slice(0, 200)) {
       lines.push(
-        `- ${attempt.taskId} arm=${attempt.arm} rep=${attempt.rep}: ${
-          attempt.error ??
-          attempt.answerError ??
-          (attempt.timedOut ? "timeout" : "invalid")
-        }`,
+        `| ${attempt.taskId} | ${attempt.arm} | ${attempt.rep} | ${attempt.status} | ${fmt(
+          attempt.latencyMs,
+          0,
+        )} | ${fmt(attempt.tokens.total, 0)} | ${attempt.statusReason} |`,
       );
     }
   }
