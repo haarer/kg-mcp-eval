@@ -1,0 +1,161 @@
+{
+  "ontology": {
+    "name": "se-seed",
+    "version": "0.1.0",
+    "source": "hand-authored systems-engineering seed",
+    "nodeKinds": [
+      { "id": "Element", "label": "Element", "description": "Root of the seed model." },
+      { "id": "System", "label": "System", "parent": "Element" },
+      { "id": "Component", "label": "Component", "parent": "Element" },
+      { "id": "SoftwareComponent", "label": "Software Component", "parent": "Component" },
+      { "id": "HardwareComponent", "label": "Hardware Component", "parent": "Component" },
+      { "id": "Function", "label": "Function", "parent": "Element" },
+      { "id": "Requirement", "label": "Requirement", "parent": "Element" },
+      { "id": "FunctionalRequirement", "label": "Functional Requirement", "parent": "Requirement" },
+      { "id": "SafetyRequirement", "label": "Safety Requirement", "parent": "Requirement" },
+      { "id": "Interface", "label": "Interface", "parent": "Element" },
+      { "id": "TestCase", "label": "Test Case", "parent": "Element" },
+      { "id": "Parameter", "label": "Parameter", "parent": "Element" }
+    ],
+    "edgeKinds": [
+      {
+        "id": "contains",
+        "label": "contains",
+        "direction": "forward",
+        "endpoints": [
+          { "source": "System", "target": "System" },
+          { "source": "System", "target": "Component" },
+          { "source": "Component", "target": "Component" }
+        ]
+      },
+      {
+        "id": "allocatedTo",
+        "label": "allocated to",
+        "direction": "forward",
+        "endpoints": [{ "source": "Function", "target": "Component" }]
+      },
+      {
+        "id": "satisfies",
+        "label": "satisfies",
+        "direction": "forward",
+        "endpoints": [{ "source": "Component", "target": "Requirement" }]
+      },
+      {
+        "id": "derivedFrom",
+        "label": "derived from",
+        "direction": "forward",
+        "endpoints": [{ "source": "Requirement", "target": "Requirement" }]
+      },
+      {
+        "id": "verifies",
+        "label": "verifies",
+        "direction": "forward",
+        "endpoints": [{ "source": "TestCase", "target": "Requirement" }]
+      },
+      {
+        "id": "provides",
+        "label": "provides",
+        "direction": "forward",
+        "endpoints": [{ "source": "Interface", "target": "Function" }]
+      },
+      {
+        "id": "requires",
+        "label": "requires",
+        "direction": "forward",
+        "endpoints": [{ "source": "Interface", "target": "Function" }]
+      },
+      {
+        "id": "hasParameter",
+        "label": "has parameter",
+        "direction": "forward",
+        "endpoints": [{ "source": "Function", "target": "Parameter" }]
+      },
+      {
+        "id": "tracesTo",
+        "label": "traces to",
+        "direction": "forward",
+        "endpoints": [{ "source": "Requirement", "target": "Requirement" }]
+      },
+      {
+        "id": "decomposesTo",
+        "label": "decomposes to",
+        "direction": "forward",
+        "endpoints": [{ "source": "Function", "target": "Function" }]
+      }
+    ]
+  },
+  "nodes": [
+    { "id": "SYS-FCS", "kind": "System", "label": "UAV Flight Control System" },
+    { "id": "C-FCC", "kind": "SoftwareComponent", "label": "Flight Control Computer" },
+    { "id": "C-NAV", "kind": "HardwareComponent", "label": "Navigation Unit" },
+    { "id": "C-ACT", "kind": "SoftwareComponent", "label": "Actuator Controller" },
+    { "id": "C-PDU", "kind": "HardwareComponent", "label": "Power Distribution Unit" },
+    { "id": "C-SFM", "kind": "SoftwareComponent", "label": "Sensor Fusion Module" },
+    { "id": "C-TLM", "kind": "HardwareComponent", "label": "Telemetry Link" },
+    { "id": "F-STAB", "kind": "Function", "label": "Stabilize Attitude" },
+    { "id": "F-GUID", "kind": "Function", "label": "Compute Guidance" },
+    { "id": "F-PWR", "kind": "Function", "label": "Manage Power" },
+    { "id": "F-FUSE", "kind": "Function", "label": "Fuse Sensor Data" },
+    { "id": "F-TLM", "kind": "Function", "label": "Transmit Telemetry" },
+    { "id": "F-FAULT", "kind": "Function", "label": "Detect Faults" },
+    { "id": "R-001", "kind": "FunctionalRequirement", "label": "Attitude stabilization within 50 ms" },
+    { "id": "R-002", "kind": "FunctionalRequirement", "label": "Guidance update at 100 Hz" },
+    { "id": "R-003", "kind": "SafetyRequirement", "label": "Safe power cutoff on fault" },
+    { "id": "R-004", "kind": "SafetyRequirement", "label": "Redundant attitude sensing" },
+    { "id": "R-005", "kind": "FunctionalRequirement", "label": "Telemetry at 10 Hz" },
+    { "id": "R-006", "kind": "SafetyRequirement", "label": "Fault detection within 20 ms" },
+    { "id": "I-I2C", "kind": "Interface", "label": "I2C Sensor Bus" },
+    { "id": "I-CAN", "kind": "Interface", "label": "CAN Actuator Bus" },
+    { "id": "I-RADIO", "kind": "Interface", "label": "Telemetry Radio Link" },
+    { "id": "T-001", "kind": "TestCase", "label": "Attitude step response test" },
+    { "id": "T-002", "kind": "TestCase", "label": "Guidance update rate test" },
+    { "id": "T-003", "kind": "TestCase", "label": "Power cutoff test" },
+    { "id": "T-004", "kind": "TestCase", "label": "Sensor redundancy test" },
+    { "id": "T-005", "kind": "TestCase", "label": "Telemetry rate test" },
+    { "id": "T-006", "kind": "TestCase", "label": "Fault detection latency test" },
+    { "id": "P-UPD", "kind": "Parameter", "label": "Update Period" },
+    { "id": "P-ERR", "kind": "Parameter", "label": "Maximum Attitude Error" },
+    { "id": "P-FLT", "kind": "Parameter", "label": "Fault Latency" }
+  ],
+  "edges": [
+    { "source": "SYS-FCS", "target": "C-FCC", "kind": "contains" },
+    { "source": "SYS-FCS", "target": "C-NAV", "kind": "contains" },
+    { "source": "SYS-FCS", "target": "C-ACT", "kind": "contains" },
+    { "source": "SYS-FCS", "target": "C-PDU", "kind": "contains" },
+    { "source": "SYS-FCS", "target": "C-SFM", "kind": "contains" },
+    { "source": "SYS-FCS", "target": "C-TLM", "kind": "contains" },
+    { "source": "F-STAB", "target": "C-FCC", "kind": "allocatedTo" },
+    { "source": "F-GUID", "target": "C-FCC", "kind": "allocatedTo" },
+    { "source": "F-PWR", "target": "C-PDU", "kind": "allocatedTo" },
+    { "source": "F-FUSE", "target": "C-SFM", "kind": "allocatedTo" },
+    { "source": "F-TLM", "target": "C-TLM", "kind": "allocatedTo" },
+    { "source": "F-FAULT", "target": "C-FCC", "kind": "allocatedTo" },
+    { "source": "C-FCC", "target": "R-001", "kind": "satisfies" },
+    { "source": "C-FCC", "target": "R-002", "kind": "satisfies" },
+    { "source": "C-PDU", "target": "R-003", "kind": "satisfies" },
+    { "source": "C-SFM", "target": "R-004", "kind": "satisfies" },
+    { "source": "C-TLM", "target": "R-005", "kind": "satisfies" },
+    { "source": "C-FCC", "target": "R-006", "kind": "satisfies" },
+    { "source": "R-002", "target": "R-001", "kind": "derivedFrom" },
+    { "source": "R-006", "target": "R-003", "kind": "derivedFrom" },
+    { "source": "T-001", "target": "R-001", "kind": "verifies" },
+    { "source": "T-002", "target": "R-002", "kind": "verifies" },
+    { "source": "T-003", "target": "R-003", "kind": "verifies" },
+    { "source": "T-004", "target": "R-004", "kind": "verifies" },
+    { "source": "T-005", "target": "R-005", "kind": "verifies" },
+    { "source": "T-006", "target": "R-006", "kind": "verifies" },
+    { "source": "I-I2C", "target": "F-FUSE", "kind": "provides" },
+    { "source": "I-CAN", "target": "F-STAB", "kind": "provides" },
+    { "source": "I-RADIO", "target": "F-TLM", "kind": "provides" },
+    { "source": "I-I2C", "target": "F-STAB", "kind": "requires" },
+    { "source": "I-CAN", "target": "F-FAULT", "kind": "requires" },
+    { "source": "I-RADIO", "target": "F-TLM", "kind": "requires" },
+    { "source": "F-STAB", "target": "P-UPD", "kind": "hasParameter" },
+    { "source": "F-STAB", "target": "P-ERR", "kind": "hasParameter" },
+    { "source": "F-FAULT", "target": "P-FLT", "kind": "hasParameter" },
+    { "source": "R-003", "target": "R-006", "kind": "tracesTo" },
+    { "source": "R-001", "target": "R-004", "kind": "tracesTo" },
+    { "source": "F-GUID", "target": "F-STAB", "kind": "decomposesTo" },
+    { "source": "F-FAULT", "target": "F-FUSE", "kind": "decomposesTo" }
+  ]
+}

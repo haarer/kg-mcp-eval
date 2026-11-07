@@ -1,0 +1,30 @@
+{
+  "name": "kg-mcp-eval",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Evaluate whether a small, ontology-aware MCP surface lets an LLM navigate and query a knowledge graph more efficiently than generic baselines.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "data": "node scripts/download-data.mjs",
+    "start": "node dist/server/http.js",
+    "dev": "tsx src/server/http.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "tasks": "node --import tsx scripts/make-tasks.ts",
+    "bench": "node --import tsx bench/harness/run.ts",
+    "calibrate": "node --import tsx bench/harness/calibrate.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "kuzu": "^0.11.3",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

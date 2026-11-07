@@ -1,0 +1,17 @@
+node_modules/
+dist/
+
+# Generated / downloaded data (regenerate with `npm run data`).
+# Kept tracked: data/NOTICE.md (attribution) and data/seeds/ (hand-authored SE seed source).
+data/raw/
+data/normalized/
+data/cache/
+
+# Benchmark run outputs and calibration artifacts.
+bench/results/
+bench/calibration/
+
+# Scratch.
+.tmp/
+*.log
+.DS_Store

@@ -1,0 +1,20 @@
+{
+  "seed": 20261107,
+  "generatedAt": "2026-11-07T07:05:11.763Z",
+  "tasks": 44,
+  "byDataset": {
+    "hetionet": 38,
+    "se-seed": 6
+  },
+  "byCategory": {
+    "lookup": 8,
+    "one_hop": 8,
+    "multi_hop": 6,
+    "aggregate": 6,
+    "path": 6,
+    "negative": 5,
+    "se_hierarchy": 2,
+    "se_composition": 2,
+    "se_trace": 1
+  }
+}
