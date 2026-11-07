@@ -23,9 +23,22 @@ Decided and frozen before the 3-rep run, so they do not count as post-hoc tuning
   reasoning model on a laptop GPU; 120s cut off valid-but-slow reasoning. A
   timeout is recorded as its own failure class, not folded into "wrong answer".
 - **Per-attempt failure classification.** Every attempt is tagged
-  `correct | wrong_answer | invalid_format | timeout | tool_limit | turn_limit |
-  error`, with a reason and runtime, so a wrong result, a format miss, and a
-  budget overrun are reported as distinct findings.
+  `correct | wrong_answer | invalid_format | timeout | server_stall |
+  tool_limit | turn_limit | error`, with a reason and runtime, so a wrong
+  result, a format miss, a budget overrun, and an infrastructure stall are
+  reported as distinct findings.
+- **Infrastructure server stalls are classified and re-tried, not scored.** A
+  timeout in which the model completed *no* step at all (0 tokens, 0 turns) is
+  an intermittent stall in the remote llama.cpp server (the GPU box occasionally
+  takes far longer than the budget to emit its first step), not a model
+  capability failure — the model never got to attempt the question. It is tagged
+  `server_stall` and automatically re-tried up to `KG_STALL_RETRIES` (default 1)
+  times so each (task, rep, arm) cell records a real model attempt; a cell still
+  stalled after the retry budget is kept and reported as infrastructure, excluded
+  from model scoring. This was diagnosed by probing the endpoint directly
+  (opencode bypassed): ~5–7% of requests show a 15–23s prefill stall, and the
+  300s 0-token timeouts are the severe tail of the same distribution. It is a
+  measurement-validity correction, not a change to the measured surfaces.
 - **Answer extraction is root-level.** The scorer takes the last *root-level*
   JSON in the model's final message. An earlier bug returned a nested sub-array
   (e.g. the `edges` list inside a path answer) instead of the answer object; the

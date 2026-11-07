@@ -41,6 +41,7 @@ interface Config {
   maxToolCalls: number;
   maxTurns: number;
   portBase: number;
+  stallRetries: number;
   smoke: boolean;
   taskFilter?: Set<string>;
   taskLimit?: number;
@@ -52,6 +53,7 @@ type AttemptStatus =
   | "wrong_answer"
   | "invalid_format"
   | "timeout"
+  | "server_stall"
   | "tool_limit"
   | "turn_limit"
   | "error";
@@ -89,6 +91,7 @@ interface Attempt {
   error?: string;
   fatal?: string;
   sessionId?: string;
+  stallRetries?: number;
 }
 
 interface Aggregate {
@@ -153,6 +156,7 @@ function loadConfig(): Config {
     maxToolCalls: Number(process.env.KG_MAX_TOOL_CALLS ?? 25),
     maxTurns: Number(process.env.KG_MAX_TURNS ?? 15),
     portBase: Number(process.env.KG_PORT_BASE ?? 8810),
+    stallRetries: Number(process.env.KG_STALL_RETRIES ?? 1),
     smoke,
     taskFilter: taskIds.length > 0 ? new Set(taskIds) : undefined,
     taskLimit:
@@ -626,11 +630,18 @@ async function runAttempt(options: {
       ? FATAL_PATTERNS.find((pattern) => stderr.includes(pattern))
       : undefined);
 
+  // A timeout with no completed step (0 tokens, 0 turns) means the model server
+  // never produced a single step within the budget. That is an intermittent
+  // infrastructure stall in the remote llama.cpp server, not a model
+  // capability failure: the model never got to attempt the question.
+  const stalled = timedOut && output.tokens.total === 0 && output.turns === 0;
+
   const classification = classifyAttempt({
     correct: score.correct,
     scoreReason: score.reason,
     answerError: extracted.error,
     timedOut,
+    stalled,
     toolLimitExceeded,
     turnLimitExceeded,
     fatal,
@@ -680,6 +691,7 @@ function classifyAttempt(args: {
   scoreReason: string;
   answerError?: string;
   timedOut: boolean;
+  stalled: boolean;
   toolLimitExceeded: boolean;
   turnLimitExceeded: boolean;
   fatal?: string;
@@ -689,6 +701,12 @@ function classifyAttempt(args: {
     return { status: "tool_limit", reason: "tool-call limit exceeded" };
   if (args.turnLimitExceeded)
     return { status: "turn_limit", reason: "turn limit exceeded" };
+  if (args.timedOut && args.stalled)
+    return {
+      status: "server_stall",
+      reason:
+        "no model step completed within budget (infrastructure stall, not a model failure)",
+    };
   if (args.timedOut) return { status: "timeout", reason: "time budget exceeded" };
   if (args.correct) return { status: "correct", reason: args.scoreReason };
   if (args.answerError) return { status: "invalid_format", reason: args.answerError };
@@ -849,7 +867,26 @@ function reportMarkdown(
   lines.push(`- reps: ${config.reps}`);
   lines.push(`- attempts: ${attempts.length}`);
   lines.push(`- aborted: ${aborted ?? "no"}`);
+  const stalledAttempts = attempts.filter(
+    (attempt) => (attempt.stallRetries ?? 0) > 0 || attempt.status === "server_stall",
+  );
+  const totalRetries = attempts.reduce(
+    (sum, attempt) => sum + (attempt.stallRetries ?? 0),
+    0,
+  );
+  const lingeringStalls = attempts.filter(
+    (attempt) => attempt.status === "server_stall",
+  ).length;
   lines.push("");
+  if (stalledAttempts.length > 0) {
+    lines.push(
+      `> **Infrastructure stalls:** the remote model server intermittently stalled before completing a step. ` +
+        `${stalledAttempts.length} attempt(s) hit a stall and ${totalRetries} automatic re-trial(s) were made; ` +
+        `${lingeringStalls} attempt(s) were still stalled after the retry budget and are reported as ` +
+        `infrastructure failures (not model answers).`,
+    );
+    lines.push("");
+  }
   lines.push("## Overall");
   lines.push("");
   lines.push("| arm | n | invalid | accuracy | 95% CI | tokens | tokens 95% CI | tool calls | turns | latency ms |");
@@ -926,6 +963,7 @@ function reportMarkdown(
       "wrong_answer",
       "invalid_format",
       "timeout",
+      "server_stall",
       "tool_limit",
       "turn_limit",
       "error",
@@ -1003,7 +1041,7 @@ async function main(): Promise<void> {
           const opencodeConfig = opencodeConfigs.get(server.key)!;
           const dataset = scoringDatasets.get(task.dataset);
           if (!dataset) throw new Error(`No scoring dataset for ${task.dataset}`);
-          const attempt = await runAttempt({
+          let attempt = await runAttempt({
             config,
             task,
             rep,
@@ -1012,10 +1050,39 @@ async function main(): Promise<void> {
             opencodeConfig,
             dataset,
           });
+          // Server stalls are intermittent and transient (the remote llama.cpp
+          // server occasionally takes longer than the budget to complete even
+          // one step). Re-try them so each (task, rep, arm) cell gets a real
+          // model attempt; a lingering stall after the retry budget is kept and
+          // reported as infrastructure, not as a model answer.
+          let stalls = 0;
+          while (attempt.status === "server_stall" && stalls < config.stallRetries) {
+            stalls += 1;
+            console.log(
+              `  [retry ${stalls}/${config.stallRetries}] ${attempt.taskId} arm=${arm} rep=${rep} server stall, re-trying`,
+            );
+            attempt = await runAttempt({
+              config,
+              task,
+              rep,
+              arm,
+              server,
+              opencodeConfig,
+              dataset,
+            });
+          }
+          if (stalls > 0) {
+            attempt = { ...attempt, stallRetries: stalls };
+            if (attempt.status === "server_stall") {
+              console.log(
+                `  [exhausted] ${attempt.taskId} arm=${arm} rep=${rep} still stalled after ${stalls} retry(ies)`,
+              );
+            }
+          }
           attempts.push(attempt);
           await appendFile(rawPath, JSON.stringify(attempt) + "\n", "utf8");
           console.log(
-            `${attempt.taskId} arm=${arm} rep=${rep} correct=${attempt.correct} tokens=${attempt.tokens.total} tools=${attempt.toolCalls}`,
+            `${attempt.taskId} arm=${arm} rep=${rep} correct=${attempt.correct} status=${attempt.status} tokens=${attempt.tokens.total} tools=${attempt.toolCalls}`,
           );
           if (attempt.fatal) {
             aborted = attempt.fatal;

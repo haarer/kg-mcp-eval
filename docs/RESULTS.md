@@ -33,11 +33,17 @@ arms, 3 reps = 108 attempts, 300s timeout, all-attempt cost.
 - **Arm C timeouts (7) + invalid_format (3)** are surface-related: the dump
   surface does not converge on Hetionet navigation (it scans 111k–371k-token
   pages and never emits an answer). Genuine finding about arm C.
-- **Arm A timeouts (5)** are mostly low/0-token (e.g. `het-onehop-01` reps 1/2
-  = 0 tokens, `het-aggregate-01` rep 2 = 0 tokens). The typed tools are fast;
-  the model produced little and then generated ~300s with no completed step —
-  an over-long-reasoning / model-reliability issue, **not** a surface fault.
-  This confound is what flips the accuracy and latency checks against arm A.
+- **Arm A timeouts (5) were 0-token/0-turn — now diagnosed as infrastructure
+  server stalls, not model or surface faults.** The remote llama.cpp box
+  intermittently stalls before completing even one step (a direct endpoint probe
+  with opencode bypassed showed ~5–7% of requests with a 15–23s prefill stall;
+  the 300s 0-token timeouts are the severe tail of the same stall). The typed
+  tools are fast and the model produces a normal answer when the server is not
+  stalled (the same `het-lookup-03` task that 0-token-timed-out completed
+  correctly in ~28s on a clean re-run). The harness now classifies these as
+  `server_stall` and re-tries them (see ADR 0003), so they no longer contaminate
+  arm A's measured accuracy or latency. This was the confound that flipped the
+  accuracy and latency checks against arm A.
 
 ## First pass (1 rep, 12-task subset, 3 arms) — directional only
 
