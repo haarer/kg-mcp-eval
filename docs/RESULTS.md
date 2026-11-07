@@ -1,11 +1,43 @@
 # Results
 
-## Status: first pass complete, official 3-rep run pending
+## Status: 3-rep subset run complete
 
 Model: `schleppx/qwen/qwen3.8-27b` — unsloth/Qwen3.8-27B-GGUF:UD-Q5_K_M,
 256k context, 8-bit KV cache, served by llama.cpp on a 24GB laptop GPU
-(~79 tok/s generation, ~336 tok/s prompt). The earlier free-tier provider block
-no longer applies; all benchmark runs use this local model.
+(~79 tok/s generation, ~336 tok/s prompt). All benchmark runs use this local
+model.
+
+Run: `bench/results/pass-3rep` — 12-task subset (6 SE-seed + 6 Hetionet), 3
+arms, 3 reps = 108 attempts, 300s timeout, all-attempt cost.
+
+### Overall (36 attempts per arm)
+
+| arm | accuracy | tokens (all attempts) | tool calls | latency ms | status breakdown |
+| --- | ---: | ---: | ---: | ---: | --- |
+| A | 80.6% | 13,345 | 3.8 | 69,505 | 29 correct · 5 timeout · 2 wrong |
+| B | 83.3% | 14,692 | 4.8 | 44,635 | 30 correct · 1 timeout · 5 wrong |
+| C | 58.3% | 39,767 | 4.6 | 98,721 | 21 correct · 7 timeout · 3 invalid_format · 5 wrong |
+
+### Pre-registered hypothesis (focus: multi-hop / path / aggregate)
+
+**NOT SUPPORTED**, and the failure is driven by timeouts, not the surface:
+- accuracy A 77.8% vs B 100% — **fail**; A lost 2 of 9 focus attempts to
+  timeouts (`het-aggregate-01` rep 2, `het-multihop-01` rep 3). With those two
+  timeouts removed A would be 9/9 (100%), matching B.
+- tokens A 16,264 vs B 25,804 — **pass** (37% fewer).
+- tool calls A 3.9 vs B 7.2 — **pass** (46% fewer).
+- latency A 112,007ms vs B 56,845ms — **fail** (A's 300s timeouts inflate it).
+
+### Central confound: timeouts split two ways
+
+- **Arm C timeouts (7) + invalid_format (3)** are surface-related: the dump
+  surface does not converge on Hetionet navigation (it scans 111k–371k-token
+  pages and never emits an answer). Genuine finding about arm C.
+- **Arm A timeouts (5)** are mostly low/0-token (e.g. `het-onehop-01` reps 1/2
+  = 0 tokens, `het-aggregate-01` rep 2 = 0 tokens). The typed tools are fast;
+  the model produced little and then generated ~300s with no completed step —
+  an over-long-reasoning / model-reliability issue, **not** a surface fault.
+  This confound is what flips the accuracy and latency checks against arm A.
 
 ## First pass (1 rep, 12-task subset, 3 arms) — directional only
 

@@ -34,6 +34,15 @@ Decided and frozen before the 3-rep run, so they do not count as post-hoc tuning
   a candidate final message is well-formed (format only, not correctness). The
   sealed prompt instructs the agent to call it before finishing. This is a
   model-agnostic robustness aid, available equally to every arm.
+- **opencode-exit hang handling.** `opencode run` does not reliably exit after a
+  session that used MCP tools: the process hangs (no open handles) once the
+  model emits its final step. The harness detects that final step
+  (`step_finish` with `reason=stop`), waits an 8s grace period, then terminates
+  the process, and measures latency to the final step (not the reaping). This
+  converts what were previously recorded as 300s "timeouts" — where the model
+  had already answered — into correct completions. A *genuine* model
+  over-reasoning (no final step within the 300s budget) still counts as a
+  timeout and is reported under its own status.
 
 Model pinned for the official run: `schleppx/qwen/qwen3.8-27b`
 (unsloth/Qwen3.8-27B-GGUF:UD-Q5_K_M, 256k context, 8-bit KV cache), served by

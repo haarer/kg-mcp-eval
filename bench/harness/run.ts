@@ -378,6 +378,7 @@ interface ParsedOutput {
   toolCalls: number;
   toolNames: string[];
   turns: number;
+  stopped?: boolean;
   sessionId?: string;
   fatal?: string;
 }
@@ -423,6 +424,7 @@ function consumeEvent(
     if (typeof text === "string") output.texts.push(text);
   } else if (type === "step_finish") {
     output.turns += 1;
+    if (part?.reason === "stop") output.stopped = true;
     const tokens = part?.tokens as
       | {
           input?: number;
@@ -525,6 +527,26 @@ async function runAttempt(options: {
   );
 
   let stdoutBuffer = "";
+  // opencode does not reliably exit after a session that used MCP tools: the
+  // process hangs with no open handles once the model emits its final
+  // step (reason=stop). We have already captured the full result from the event
+  // stream, so once we see the final step we give it a short grace period to
+  // exit on its own and then terminate it. This is a normal completion, not a
+  // timeout.
+  const stopGraceMs = Number(process.env.KG_GRACE_MS ?? 8_000);
+  let stopTimer: NodeJS.Timeout | undefined;
+  let stoppedAt: number | undefined;
+  const finishOnStop = () => {
+    if (stoppedAt === undefined) stoppedAt = Date.now();
+    if (stopTimer || child.exitCode !== null) return;
+    stopTimer = setTimeout(() => {
+      if (child.exitCode !== null) return;
+      child.kill("SIGTERM");
+      setTimeout(() => {
+        if (child.exitCode === null) child.kill("SIGKILL");
+      }, 3_000);
+    }, stopGraceMs);
+  };
   const handleLine = (line: string) => {
     if (!line.trim()) return;
     try {
@@ -538,6 +560,7 @@ async function runAttempt(options: {
         turnLimitExceeded = true;
         child.kill("SIGKILL");
       }
+      if (output.stopped) finishOnStop();
     } catch {
       // ignore non-JSON output
     }
@@ -564,16 +587,22 @@ async function runAttempt(options: {
   }, config.timeoutMs);
 
   await new Promise<void>((resolve) => {
-    child.on("close", () => resolve());
+    child.on("close", () => {
+      if (stopTimer) clearTimeout(stopTimer);
+      resolve();
+    });
     child.on("error", (error) => {
       output.fatal = error.message;
+      if (stopTimer) clearTimeout(stopTimer);
       resolve();
     });
   });
   clearTimeout(timer);
   if (stdoutBuffer.trim()) handleLine(stdoutBuffer);
 
-  const latencyMs = Date.now() - started;
+  // Use the moment the model emitted its final step (if it did) so the 8s
+  // grace used to reap a hung opencode process is not counted as model time.
+  const latencyMs = (stoppedAt ?? Date.now()) - started;
   await rm(workdir, { recursive: true, force: true });
 
   if (process.env.KG_DUMP_TEXTS === "1") {
