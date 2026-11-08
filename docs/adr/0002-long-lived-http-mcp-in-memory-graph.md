@@ -1,6 +1,6 @@
 # Long-lived HTTP MCP server holding the graph in memory
 
-The benchmark runs hundreds of isolated agent sessions. A per-session stdio MCP server would reload the full Hetionet graph (2.25M edges) for every task, inflating latency and risking timeouts. We expose MCP over streamable HTTP from one long-lived process that loads and indexes the graph once, while retaining a thin stdio entrypoint for portability. Storage is in-memory typed indexes; there is no database.
+The benchmark runs hundreds of isolated agent sessions. A per-session stdio MCP server would reload the full Hetionet graph (2.25M edges) for every task, inflating latency and risking timeouts. We expose MCP over streamable HTTP from one long-lived process that loads and indexes the graph once, while retaining a thin stdio entrypoint for portability. Storage is in-memory typed indexes; there is no database (arm B additionally loads the same data into embedded Kuzu for its Cypher baseline — see ADR 0009).
 
 ## Consequences
 

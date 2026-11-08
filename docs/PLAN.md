@@ -29,11 +29,13 @@ Each task records `id`, `dataset`, `category`, `prompt`, `answer_type`, `constra
 
 ## Protocol
 
-- 3 repetitions, fresh opencode session per run, low temperature.
-- <=25 tool calls, <=15 turns, 120s timeout per run.
-- Arms interleaved per task/repetition.
+- 3 repetitions, fresh opencode session per run, low temperature (configured 0).
+- <=25 tool calls, <=15 turns, 300s timeout per run.
+- All three arms run consecutively for each task/repetition (arm loop innermost);
+  repetitions are sequential.
 - Sealed agent; no dataset or golds reachable from the workdir.
-- Per-category median + IQR and bootstrap 95% CIs.
+- Per-category mean accuracy and mean per-attempt cost (tokens, tool calls, turns,
+  latency) with bootstrap 95% CIs.
 
 ## Running
 
@@ -47,7 +49,8 @@ npm run bench              # 44 tasks, 3 reps, all arms
 
 Environment overrides: `KG_MODEL`, `KG_ARMS`, `KG_REPS`, `KG_TASKS`,
 `KG_TASK_LIMIT`, `KG_TIMEOUT_MS`, `KG_MAX_TOOL_CALLS`, `KG_MAX_TURNS`,
-`KG_PORT_BASE`, `KG_OUT`.
+`KG_PORT_BASE`, `KG_OUT`, `KG_RUN_ID`, `KG_GRACE_MS`, `KG_DUMP_TEXTS`,
+`KG_STALL_RETRIES`.
 
 The harness starts one long-lived HTTP MCP server per arm/dataset, writes a
 sealed opencode config with global MCP servers disabled, and runs a fresh
@@ -78,7 +81,7 @@ access errors instead of burning the full timeout.
 | --- | --- |
 | Kuzu native module unavailable | Fallback pattern DSL in arm B |
 | opencode token trace insufficient | Parse JSON events; fall back to session export/provider usage |
-| Model drift | Pin model and settings; interleave; store manifest |
+| Model drift | Pin model and settings; run all arms back-to-back per task; store manifest |
 | Agent reads data directly | Sealed agent and empty workdir |
 | Graph reload skews latency | Long-lived HTTP server |
 | SAF access absent | Adapter boundary only |

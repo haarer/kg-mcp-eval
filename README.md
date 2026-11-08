@@ -4,9 +4,9 @@ Evaluate whether a small, ontology-aware MCP surface lets an LLM navigate and qu
 
 ## Hypothesis
 
-A typed, graph-native surface (arm A) answers KG questions at least as accurately as a generic Cypher tool (arm B) or a bounded data dump (arm C), while using >=25% fewer tokens and >=30% fewer tool calls on multi-hop, path, and aggregate tasks.
+A typed, graph-native surface (arm A) answers KG questions at least as accurately as a generic Cypher tool (arm B) or a bounded data dump (arm C), while using >=25% fewer tokens and >=30% fewer tool calls on multi-hop, path, and aggregate tasks (accuracy within 5 pp of the best baseline, latency <=1.2x).
 
-This is a deliberately falsifiable experiment. The pre-registered thresholds live in `docs/adr/0003-three-arm-benchmark-with-preregistered-thresholds.md`.
+This is a deliberately falsifiable experiment. The pre-registered thresholds live in [docs/adr/0003-three-arm-benchmark-with-preregistered-thresholds.md](docs/adr/0003-three-arm-benchmark-with-preregistered-thresholds.md).
 
 ## Architecture
 
@@ -46,8 +46,8 @@ npm run bench -- --smoke
 npm run bench           # full 44-task, 3-rep run
 ```
 
-See `docs/PLAN.md` for the protocol and `docs/RESULTS.md` for current status.
+See [docs/PLAN.md](docs/PLAN.md) for the protocol and [docs/RESULTS.md](docs/RESULTS.md) for the results.
 
 ## Status
 
-See `docs/PLAN.md` for milestones and `docs/RESULTS.md` once the benchmark has run. Architecture decisions are in `docs/adr/`; project vocabulary is in `CONTEXT.md`.
+The definitive run is complete (44 tasks × 3 arms × 3 reps = 396 attempts). The pre-registered hypothesis is **not supported on token efficiency**: arm A used 13% fewer tokens on the focus categories versus the 25% bar, while accuracy, tool calls, and latency all passed. See [docs/RESULTS.md](docs/RESULTS.md) for the full verdict, [docs/PLAN.md](docs/PLAN.md) for milestones, [docs/adr/](docs/adr/) for architecture decisions, and [CONTEXT.md](CONTEXT.md) for project vocabulary.
