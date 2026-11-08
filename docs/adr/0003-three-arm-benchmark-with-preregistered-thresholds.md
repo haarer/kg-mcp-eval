@@ -80,3 +80,34 @@ queues the next request), custom **MTP speculative decoding**
 intermittent 15–23s prefill stalls and their >300s tail. The context was 192K
 (reduced from 256K) for the official run to lower VRAM/KV pressure. No external
 requests are sent to the endpoint while a run is in progress.
+
+## Post-run finding: answer-format artifacts (reported, not re-scored)
+
+The full run's 26 `wrong_answer` results are almost entirely answer-*format*
+artifacts rather than navigation errors:
+
+- **16 id-array wraps** (A 5, B 9, C 2): the model returned `["Gene::X"]` where a
+  bare `"Gene::X"` was required. Verified 16/16 carried the exact gold value.
+- **9 kind-prefixed ID sets** (A 1, B 4, C 4): e.g. `SoftwareComponent::C-ACT`
+  where gold is `C-ACT`. Verified 9/9 matched gold after stripping the `Kind::`
+  prefix.
+- **1 edge-label path** (A, `het-path-03`): correct nodes, but the edges were
+  reported as human labels (`"Anatomy - downregulates - Gene"`) instead of
+  edge-kind IDs.
+
+These counted as failures (`correct = false`) and therefore depressed measured
+overall accuracy. Normalizing them would give **A 99.2% (131/132), B 98.5%
+(130/132), C 42.4% (56/132)** instead of 94.7 / 88.6 / 37.9%.
+
+They do **not** affect the pre-registered verdict: all 25 array/prefix artifacts
+occur in `lookup` (`id`) and `se_composition` (`id_set`), which are outside the
+focus categories (multi-hop/path/aggregate). The focus accuracy (98.1% vs 96.3%)
+and the token-based decision are therefore unchanged — the verdict fails on token
+efficiency, not accuracy.
+
+Decision: **report, do not re-score.** Re-scoring after seeing results would
+violate the pre-registration, and the conclusion does not depend on it. A future
+run should remove this confound by tightening the answer contract (state that a
+single ID is a bare string, not an array; use bare IDs for SE composition) or by
+normalizing array-wrap and `Kind::` prefixes in the scorer. The one edge-label
+path may also pass under a label→kind mapping, but that is unverified.
