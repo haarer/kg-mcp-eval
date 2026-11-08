@@ -58,5 +58,25 @@ Decided and frozen before the 3-rep run, so they do not count as post-hoc tuning
   timeout and is reported under its own status.
 
 Model pinned for the official run: `schleppx/qwen/qwen3.8-27b`
-(unsloth/Qwen3.8-27B-GGUF:UD-Q5_K_M, 256k context, 8-bit KV cache), served by
-llama.cpp on a 24GB laptop GPU.
+(unsloth/Qwen3.8-27B-GGUF:UD-Q5_K_M), served by a custom llama.cpp fork on a
+24GB laptop GPU with:
+
+```
+./build-v2/bin/llama-server \
+  -hf unsloth/Qwen3.8-27B-GGUF:UD-Q5_K_M \
+  --ctx-size 196608 --parallel 1 \
+  --batch-size 256 --ubatch-size 256 --n-gpu-layers 999 \
+  --flash-attn on --cache-type-k q8_0 --cache-type-v q8_0 \
+  --kv-stream-arena-mib 3840 \
+  --spec-type draft-mtp --spec-draft-n-max 3 \
+  --fit off --host 0.0.0.0 --port 1234
+```
+
+Relevant to the `server_stall` class above: the server runs `--parallel 1`
+(one request at a time, so a lingering prior request or any external probe
+queues the next request), custom **MTP speculative decoding**
+(`--spec-type draft-mtp`) and **adaptive KV streaming**
+(`--kv-stream-arena-mib 3840`). These custom paths are the likely source of the
+intermittent 15–23s prefill stalls and their >300s tail. The context was 192K
+(reduced from 256K) for the official run to lower VRAM/KV pressure. No external
+requests are sent to the endpoint while a run is in progress.
